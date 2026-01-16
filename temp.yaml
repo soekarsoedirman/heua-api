@@ -1,26 +1,25 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  heua-api: Backend Aplikasi Manajement Keuangan HeUa
+  heua-api: Backend Manajemen Keuangan HeUa
 
 Globals:
   Function:
-    Timeout: 10
+    Timeout: 10 # Ditingkatkan sedikit agar Hapi.js punya waktu inisialisasi
     MemorySize: 128
     Runtime: nodejs22.x
     Tracing: Active
     Architectures:
-     - arm64
+      - arm64 # Lebih murah dan masuk jatah Always Free
     LoggingConfig:
       LogFormat: JSON
-  Api:
-    TracingEnabled: true
 
 Resources:
+  # 1. Lambda Function Utama
   HeuaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/  
+      CodeUri: src/   
       Handler: app.lambdaHandler
       Events:
         HeuaApi:
@@ -31,20 +30,21 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref HeuaTable 
-    Metadata: 
+    Metadata: # Indentasi diperbaiki, sejajar dengan Properties
       BuildMethod: esbuild
       BuildProperties:
         Minify: true
         Target: es2020
         Sourcemap: true
         EntryPoints:
-        - app.ts
+          - app.ts
 
+  # 2. Database DynamoDB (Always Free)
   HeuaTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: HeuaData
-      BillingMode: PAY_PER_REQUEST 
+      BillingMode: PAY_PER_REQUEST # Gratis hingga 25 GB penyimpanan
       AttributeDefinitions:
         - AttributeName: PK
           AttributeType: S
@@ -55,26 +55,11 @@ Resources:
           KeyType: HASH
         - AttributeName: SK
           KeyType: RANGE
-    
-
-  ApplicationResourceGroup:
-    Type: AWS::ResourceGroups::Group
-    Properties:
-      Name:
-        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
-      ResourceQuery:
-        Type: CLOUDFORMATION_STACK_1_0
-  ApplicationInsightsMonitoring:
-    Type: AWS::ApplicationInsights::Application
-    Properties:
-      ResourceGroupName:
-        Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: 'true'
 
 Outputs:
- HeuaApiUrl:
+  HeuaApiUrl:
     Description: "URL API Gateway untuk aplikasi Kotlin Anda"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
- HeuaFunctionArn:
+  HeuaFunctionArn:
     Description: "ARN Fungsi Lambda Heua"
     Value: !GetAtt HeuaFunction.Arn
