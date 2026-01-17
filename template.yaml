@@ -17,17 +17,51 @@ Globals:
     TracingEnabled: true
 
 Resources:
-  HeuaFunction:
+  HeuaAuthFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/  
-      Handler: app.lambdaHandler
-      Events:
-        HeuaApi:
-          Type: Api
-          Properties:
-            Path: /{proxy+} 
-            Method: ANY
+      CodeUri: src/auth
+      Handler: handler.lambdaHandler
+      FunctionUrlConfig:
+        AuthType: NONE
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HeuaTable 
+    Metadata: 
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+        - app.ts
+
+  HeuaTransactionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/transaction
+      Handler: handler.lambdaHandler
+      FunctionUrlConfig:
+        AuthType: NONE
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HeuaTable 
+    Metadata: 
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+        - app.ts
+
+  HeuaStatisticFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/statistic
+      Handler: handler.lambdaHandler
+      FunctionUrlConfig:
+        AuthType: NONE
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref HeuaTable 
@@ -42,9 +76,14 @@ Resources:
 
   HeuaTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete #Retain
+    UpdateReplacePolicy: Delete #Retain
     Properties:
       TableName: HeuaData
-      BillingMode: PAY_PER_REQUEST 
+      BillingMode: PROVISIONED 
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
       AttributeDefinitions:
         - AttributeName: PK
           AttributeType: S
@@ -72,9 +111,14 @@ Resources:
       AutoConfigurationEnabled: 'true'
 
 Outputs:
- HeuaApiUrl:
-    Description: "URL API Gateway untuk aplikasi Kotlin Anda"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
- HeuaFunctionArn:
-    Description: "ARN Fungsi Lambda Heua"
-    Value: !GetAtt HeuaFunction.Arn
+  HeuaAuthFunctionUrl:
+    Description: Auth Lambda Function URL
+    Value: !GetAtt HeuaAuthFunctionUrl.FunctionUrl
+
+  HeuaTransactionFunctionUrl:
+    Description: Transaction Lambda Function URL
+    Value: !GetAtt HeuaTransactionFunctionUrl.FunctionUrl
+
+  HeuaStatisticFunctionUrl:
+    Description: Statistic Lambda Function URL
+    Value: !GetAtt HeuaStatisticFunctionUrl.FunctionUrl

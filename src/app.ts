@@ -3,8 +3,8 @@ import {
     APIGatewayProxyResult,
     Context 
 } from 'aws-lambda';
-import * as appService from './service/app/appService';
-import * as authService from './service/auth/authService';
+import * as appService from './transaction/service';
+import * as authService from './auth/authService';
 
 /**
  * Handler utama untuk AWS Lambda.

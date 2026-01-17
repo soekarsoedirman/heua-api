@@ -30,7 +30,7 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref HeuaTable 
-    Metadata: # Indentasi diperbaiki, sejajar dengan Properties
+    Metadata: 
       BuildMethod: esbuild
       BuildProperties:
         Minify: true
@@ -39,12 +39,12 @@ Resources:
         EntryPoints:
           - app.ts
 
-  # 2. Database DynamoDB (Always Free)
+
   HeuaTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: HeuaData
-      BillingMode: PAY_PER_REQUEST # Gratis hingga 25 GB penyimpanan
+      BillingMode: PAY_PER_REQUEST 
       AttributeDefinitions:
         - AttributeName: PK
           AttributeType: S
