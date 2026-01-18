@@ -1,148 +1,117 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { 
-    DynamoDBDocumentClient, 
-    PutCommand, 
-    GetCommand 
-} from "@aws-sdk/lib-dynamodb";
 import bcrypt from "bcryptjs";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
+import jwt from "jsonwebtoken";
 
-// Inisialisasi Client DynamoDB
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
-const TABLE_NAME = "HeuaData"; // Sesuaikan dengan nama di template.yaml
+const TableName = process.env.TABLE_NAME;
 
-export const lambdaHandler = async (event: any) => {
-    try {
-        // Mengambil metadata HTTP dari Function URL [cite: 35]
-        const httpMethod = event.requestContext.http.method;
-        const path = event.rawPath;
-        const body = event.body ? JSON.parse(event.body) : {};
-
-        // Routing berdasarkan path dan method
-        if (httpMethod === 'POST' && path === '/register') {
-            return await handleRegister(body);
-        } 
-        
-        if (httpMethod === 'POST' && path === '/login') {
-            return await handleLogin(body);
-        }
-
-        return {
-            statusCode: 404,
-            body: JSON.stringify({ message: "Endpoint tidak ditemukan" }),
-        };
-
-    } catch (error: any) {
-        console.error("Error:", error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ 
-                message: "Internal Server Error", 
-                error: error.message 
-            }),
-        };
-    }
+const getDailyQuote = async () => {
+    const today = new Date();
+    const dayNumber = today.getDay() === 0 ? 7 : today.getDay();
+    const result = await docClient.send(new GetCommand({
+        TableName: TableName,
+        Key: { PK: `QUOTE`, SK: `${dayNumber}` }
+    }));
+    return result.Item || { text: "Tetap hemat!", author: "HeUa" }; // Fallback jika quote kosong [cite: 34]
 };
 
-/**
- * Fitur Register: Menyimpan username, email, dan password 
- */
-async function handleRegister(data: any) {
-    const { username, email, password } = data;
+export const login = async (data: any) => {
+    const { email, password } = data;
+    if (!email || !password) throw { status: 400, message: "Email dan password wajib diisi" };
+
+    const userResult = await docClient.send(new GetCommand({
+        TableName: TableName,
+        Key: { PK: `USER#${email}`, SK: `METADATA#${email}` }
+    }));
+
+    const user = userResult.Item;
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+        throw { status: 401, message: "Email atau password salah" };
+    }
+
+    const [quote, token] = await Promise.all([
+        getDailyQuote(),
+        jwt.sign({ email, username: user.username }, process.env.JWT_SECRET!, { expiresIn: "1h" })
+    ]);
+
+    return { token, username: user.username, quote };
+};
+
+
+export const register = async (data: any) => {
+    const { email, password, username } = data;
 
     if (!username || !email || !password) {
-        return { 
-            statusCode: 400, 
-            body: JSON.stringify({ message: "Username, email, dan password wajib diisi" }) 
-        };
+        throw { status: 400, message: "Data pendaftaran tidak lengkap" };
     }
 
-    // Hash password sebelum disimpan untuk keamanan
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const params = {
-        TableName: TABLE_NAME,
-        Item: {
-            PK: `USER#${email}`, // Partition Key berdasarkan email
-            SK: `METADATA#${email}`, // Sort Key metadata [cite: 35]
-            username: username,
-            password: hashedPassword,
-            photo_url: "default-avatar.png", // Avatar default tidak bisa diganti [cite: 34]
-            quote: "Atur keuanganmu, atur masa depanmu", // Quote default [cite: 34]
-            createdAt: new Date().toISOString(),
-        },
-        // Mencegah duplikasi email
-        ConditionExpression: "attribute_not_exists(PK)"
+    const userItem = {
+        PK: `USER#${email}`,
+        SK: `METADATA`,
+        username: username,
+        password: await bcrypt.hash(password, 10),
+        createdAt: new Date().toISOString(),
     };
 
-    try {
-        await docClient.send(new PutCommand(params));
-        return {
-            statusCode: 201,
-            body: JSON.stringify({ message: "Registrasi berhasil" }),
-        };
-    } catch (err: any) {
-        if (err.name === "ConditionalCheckFailedException") {
-            return { 
-                statusCode: 400, 
-                body: JSON.stringify({ message: "Email sudah terdaftar" }) 
-            };
+    const moneyItem = {
+        PK: `USER#${email}`,
+        SK: 'MONEY',
+        bank: 0,
+        cash: 0,
+        tabungan: 0,
+    };
+
+    const kategoriDefault = ["Makan", "Transportasi", "Internet & Pulsa", "Kebutuhan Harian", "Hiburan", "Lainnya"];
+    const categoryActions = kategoriDefault.map((nama) => ({
+        Put: {
+            TableName: TableName,
+            Item: {
+                PK: `USER#${email}`,
+                SK: `CAT#${nama.toUpperCase().replace(/\s+/g, "_")}`,
+                nama,
+                limit: 0,
+                terpakai: 0,
+                isDefault: true,
+            },
         }
-        throw err;
-    }
-}
+    }));
 
-/**
- * Fitur Login: Verifikasi email dan password 
- */
-async function handleLogin(data: any) {
-    const { email, password } = data;
+    // try {
+    //     // Mengirimkan semua data (User, Money, & Kategori) dalam SATU transaksi
+    //     // Ini jauh lebih OPTIMAL daripada mengirim satu per satu
+    //     await docClient.send(new TransactWriteItemsCommand({
+    //         TransactItems: [
+    //             {
+    //                 Put: {
+    //                     TableName: TableName,
+    //                     Item: userItem,
+    //                     ConditionExpression: "attribute_not_exists(PK)"
+    //                 }
+    //             },
+    //             {
+    //                 Put: {
+    //                     TableName: TableName,
+    //                     Item: moneyItem
+    //                 }
+    //             },
+    //             ...categoryActions
+    //         ]
+    //     }));
 
-    if (!email || !password) {
-        return { 
-            statusCode: 400, 
-            body: JSON.stringify({ message: "Email dan password wajib diisi" }) 
-        };
-    }
+    // } catch (error: any) {
+    //     if (error.name === "TransactionCanceledException") {
+    //         throw { status: 400, message: "Email sudah terdaftar" };
+    //     }
+    //     throw error;
+    // }
 
-    const params = {
-        TableName: TABLE_NAME,
-        Key: {
-            PK: `USER#${email}`,
-            SK: `METADATA#${email}`
-        }
-    };
+    // Eksekusi paralel untuk Quote dan JWT agar Lambda lebih cepat
+    const [quote, token] = await Promise.all([
+        getDailyQuote(),
+        jwt.sign({ email, username }, process.env.JWT_SECRET!, { expiresIn: "1h" })
+    ]);
 
-    const { Item } = await docClient.send(new GetCommand(params));
-
-    if (!Item) {
-        return { 
-            statusCode: 401, 
-            body: JSON.stringify({ message: "Email atau password salah" }) 
-        };
-    }
-
-    // Membandingkan hash password
-    const isPasswordValid = await bcrypt.compare(password, Item.password);
-
-    if (!isPasswordValid) {
-        return { 
-            statusCode: 401, 
-            body: JSON.stringify({ message: "Email atau password salah" }) 
-        };
-    }
-
-    // Mengembalikan data profil untuk Dashboard [cite: 18, 34]
-    return {
-        statusCode: 200,
-        body: JSON.stringify({
-            message: "Login berhasil",
-            user: {
-                username: Item.username,
-                email: email,
-                photo_url: Item.photo_url,
-                quote: Item.quote
-            }
-        }),
-    };
-}
+    return { token, username, quote };
+};
