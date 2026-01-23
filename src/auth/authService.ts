@@ -76,7 +76,7 @@ export const register = async (data: any) => {
             TableName: TableName,
             Item: {
                 PK: `USER#${email}`,
-                SK: `CAT#${index + 1}`,
+                SK: `CAT#${nama.toUpperCase().replace(/\s+/g, "_")}`,
                 nama,
                 limit: 0,
                 terpakai: 0,
