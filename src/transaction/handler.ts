@@ -8,13 +8,43 @@ export const lambdaHandler = async (event:any) => {
         const httpMethod = event.requestContext.http.method;
         const path = event.rawPath
         const data = event.body ? JSON.parse(event.body) : {};
+
+        if (httpMethod === 'POST' && path === '/income'){
+            await sevice.newIncome(data, user);
+            return{
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: "income tercatat",
+                })
+            }
+        }
+
+        if (httpMethod === 'PUT' && path === '/income'){
+            await sevice.editIncome(data, user);
+            return{
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: "Income diupdate",
+                })
+            }
+        }
+
+        if (httpMethod === 'DELETE' && path === '/income'){
+            await sevice.deleteIncome(data, user);
+            return{
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: "Income dihapus",
+                })
+            }
+        }
         
         if (httpMethod === 'POST' && path === '/outcome'){
             await sevice.newOutcome(data, user);
             return {
                 statusCode: 200,
                 body: JSON.stringify({
-                    message: "Transaction created",
+                    message: "Outcome tercatat",
                 })
             }
         }
@@ -24,7 +54,7 @@ export const lambdaHandler = async (event:any) => {
             return{
                 statusCode : 200,
                 body: JSON.stringify({
-                    message: "Transaction updated",
+                    message: "Outcome diupdate",
                 })
             }
         }
@@ -34,7 +64,7 @@ export const lambdaHandler = async (event:any) => {
             return{
                 statusCode : 200,
                 body: JSON.stringify({
-                    message: "Transaction deleted",
+                    message: "Outcome terhapus",
                 })
             }
         }
@@ -44,7 +74,7 @@ export const lambdaHandler = async (event:any) => {
             return{
                 statusCode: 200,
                 body: JSON.stringify({
-                    message: "Debt created",
+                    message: "Hutang tercatat",
                 })
             }
         }
@@ -54,7 +84,7 @@ export const lambdaHandler = async (event:any) => {
             return{
                 statusCode: 200,
                 body: JSON.stringify({
-                    message: "Debt updated",
+                    message: "Hutang diupdate",
                 })
             }
         }
@@ -64,7 +94,7 @@ export const lambdaHandler = async (event:any) => {
             return{
                 statusCode: 200,
                 body: JSON.stringify({
-                    message: "Debt deleted",
+                    message: "Hutang terhapus",
                 })
             }
         }
@@ -74,7 +104,7 @@ export const lambdaHandler = async (event:any) => {
             return{
                 statusCode: 200,
                 body: JSON.stringify({
-                    message: "Category created",
+                    message: "Kategori dibuat",
                 })
             }
         }
@@ -84,7 +114,7 @@ export const lambdaHandler = async (event:any) => {
             return{
                 statusCode: 200,
                 body: JSON.stringify({
-                    message: "Category updated",
+                    message: "Kategori Diedit",
                 })
             }
         }
@@ -94,7 +124,7 @@ export const lambdaHandler = async (event:any) => {
             return{
                 statusCode: 200,
                 body: JSON.stringify({
-                    message: "Category deleted",
+                    message: "Kategori terhapus",
                 })
             }
         }
