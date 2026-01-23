@@ -9,8 +9,8 @@ export const lambdaHandler = async (event:any) => {
         const path = event.rawPath
         const data = event.body ? JSON.parse(event.body) : {};
         
-        if (httpMethod === 'POST' && path === '/transaction'){
-            await sevice.newTransaktion(data, user);
+        if (httpMethod === 'POST' && path === '/outcome'){
+            await sevice.newOutcome(data, user);
             return {
                 statusCode: 200,
                 body: JSON.stringify({
@@ -19,8 +19,8 @@ export const lambdaHandler = async (event:any) => {
             }
         }
 
-        if (httpMethod === 'PUT' && path === '/transaction'){
-            await sevice.editTransaction(data, user);
+        if (httpMethod === 'PUT' && path === '/outcome'){
+            await sevice.editOutcome(data, user);
             return{
                 statusCode : 200,
                 body: JSON.stringify({
@@ -29,8 +29,8 @@ export const lambdaHandler = async (event:any) => {
             }
         }
 
-        if (httpMethod === 'DELETE' && path === '/transaction'){
-            await sevice.deleteTransaction(data, user);
+        if (httpMethod === 'DELETE' && path === '/outcome'){
+            await sevice.deleteOutcome(data, user);
             return{
                 statusCode : 200,
                 body: JSON.stringify({
@@ -100,7 +100,7 @@ export const lambdaHandler = async (event:any) => {
         }
 
         
-    } catch (error) {
+    } catch (error:any) {
         console.error("Error Log: ", error);
         return {
             statusCode: error.status || 500,
