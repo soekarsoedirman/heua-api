@@ -99,6 +99,16 @@ export const lambdaHandler = async (event:any) => {
             }
         }
 
+        if (httpMethod === 'POST' && path === '/payDebt'){
+            await sevice.payDebt(data, user);
+            return{
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: "Hutang terbayar",
+                })
+            }
+        }
+
         if (httpMethod === 'POST' && path === '/category'){
             await sevice.newCategory(data, user);
             return{
