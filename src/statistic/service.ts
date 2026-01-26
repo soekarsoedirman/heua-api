@@ -14,49 +14,10 @@ const TableName = process.env.TABLE_NAME;
 
 export const dashboard = async(data:any, user:any ) => {
     const userEmail = (user as any).email;
-
-    const transactItems: any [] = [
-        {
-            Get:{
-                TableName: TableName,
-                Key: {
-                    Pk: `USER#${userEmail}`,
-                    Sk: "MONEY"
-                } 
-            }
-        }
-    ];
-
-    //TAMBAHIN LAGI NANTI 
-    //TAMBAHIN LAGI NANTI
-
-
-    const result = await docClient.send(new TransactWriteCommand({TransactItems: transactItems}));
-
-    return result;
 }
 
 export const statistic = async(data:any, user:any) => {
     const userEmail = (user as any).email;
-
-    const transactItems: any [] = [
-        {
-            Get:{
-                TableName: TableName,
-                Key: {
-                    Pk: `USER#${userEmail}`,
-                    Sk: "MONEY"
-                } 
-            }
-        }
-    ];
-
-    //TAMBAHIN LAGI NANTI
-    //TAMBAHIN LAGI NANTI
-
-    const result = await docClient.send(new TransactWriteCommand({TransactItems: transactItems}));
-
-    return result;
 }
 
 export const riwayat = async(data:any, user:any) => {
