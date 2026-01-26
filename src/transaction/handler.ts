@@ -139,6 +139,16 @@ export const lambdaHandler = async (event:any) => {
             }
         }
 
+        if (httpMethod === 'POST' && path === '/switch'){
+            await sevice.tukarsimpanan(data, user);
+            return{
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: "uang berhasil ditukar",
+                })
+            }
+        }
+
         
     } catch (error:any) {
         console.error("Error Log: ", error);
