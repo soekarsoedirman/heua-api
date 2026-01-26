@@ -55,7 +55,7 @@ export const lambdaHandler = async (event:any) => {
         }
 
         
-    } catch (error) {
+    } catch (error:any) {
         console.error("Error Log: ", error);
         return {
             statusCode: error.status || 500,
