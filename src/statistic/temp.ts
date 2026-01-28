@@ -1,31 +1,21 @@
-import { QueryCommand } from "@aws-sdk/lib-dynamodb";
+export const getOutcomeSummary = async (userEmail: string) => {
+    const result = await docClient.send(new QueryCommand({
+        TableName: TableName,
+        KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk_prefix)",
+        ExpressionAttributeValues: {
+            ":pk": `USER#${userEmail}`,
+            ":sk_prefix": "OUTCOME#"
+        }
+    }));
 
-export const getTransactions = async (user: any) => {
-    const userEmail = (user as any).email;
+    const items = result.Items || [];
 
-    // Menyiapkan dua kueri berbeda yang berjalan secara paralel
-    const [incomeResult, outcomeResult] = await Promise.all([
-        docClient.send(new QueryCommand({
-            TableName: TableName,
-            KeyConditionExpression: "PK = :pk AND begins_with(SK, :prefix)",
-            ExpressionAttributeValues: {
-                ":pk": `USER#${userEmail}`,
-                ":prefix": "INCOME#"
-            }
-        })),
-        docClient.send(new QueryCommand({
-            TableName: TableName,
-            KeyConditionExpression: "PK = :pk AND begins_with(SK, :prefix)",
-            ExpressionAttributeValues: {
-                ":pk": `USER#${userEmail}`,
-                ":prefix": "OUTCOME#"
-            }
-        }))
-    ]);
+    // Menggunakan reduce untuk menjumlahkan atribut 'nominal'
+    const totalOutcome = items.reduce((sum, item) => sum + (item.nominal || 0), 0);
 
-    // Menggabungkan hasil ke dalam satu objek result
     return {
-        income: incomeResult.Items || [],
-        outcome: outcomeResult.Items || []
+        total: totalOutcome,
+        count: items.length,
+        data: items
     };
 };
