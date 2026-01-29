@@ -1,5 +1,4 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { 
     DynamoDBDocumentClient, 
     PutCommand, 
@@ -14,7 +13,7 @@ const TableName = process.env.TABLE_NAME;
 export const getRemainingDaysInMonth = () => {
     const now = new Date(); 
     const year = now.getFullYear();
-    const month = now.getMonth() + 1; // Januari = 1
+    const month = now.getMonth() + 1;
 
     const lastDayOfMonth = new Date(year, month, 0).getDate();
     const today = now.getDate();
@@ -76,8 +75,47 @@ export const dashboard = async (data: any, user: any) => {
     };
 };
 
+export const makestate =async(data:any, user:any) => {
+    const userEmail = (user as any).email;
+    const {year, mounth} = data;
+
+    const [income, outcome, debt, money] = await Promise.all([
+        docClient.send(new QueryCommand({
+            TableName: TableName,
+            KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk_prefix)",
+            ExpressionAttributeValues: {
+                ":pk": `USER#${userEmail}`,
+                ":sk_prefix": "INCOME#"
+            }
+        })),
+        docClient.send(new QueryCommand({
+            TableName: TableName,
+            KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk_prefix)",
+            ExpressionAttributeValues: {
+                ":pk": `USER#${userEmail}`,
+                ":sk_prefix": "OUTCOME#"
+            }
+        })),
+        docClient.send(new QueryCommand({
+            TableName: TableName,
+            KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk_prefix)",
+            ExpressionAttributeValues: {
+                ":pk": `USER#${userEmail}`,
+                ":sk_prefix": "DEBT#"
+            }
+        })),
+        docClient.send(new GetCommand({
+            TableName: TableName,
+            Key: { PK: `USER#${userEmail}`, SK: "MONEY" }
+        }))
+    ]);
+}
+
+
 export const statistic = async(data:any, user:any) => {
     const userEmail = (user as any).email;
+
+    return
 }
 
 export const riwayat = async(data:any, user:any) => {

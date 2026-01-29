@@ -7,8 +7,12 @@ export const lambdaHandler = async (event:any) => {
         const userEmail = (user as any).email;
 
         const httpMethod = event.requestContext.http.method;
-        const path = event.rawPath
-        const data = event.body ? JSON.parse(event.body) : {};
+        const path = event.rawPath;
+        const data = {
+            ...(event.queryStringParameters || {}),
+            ...(event.body ? JSON.parse(event.body) : {})
+        };
+        const data2 = event.body ? JSON.parse(event.body) : {};
         
         if (httpMethod === 'GET' && path === '/dashboard'){
             const dashboard = await sevice.dashboard(data, user);
@@ -17,6 +21,17 @@ export const lambdaHandler = async (event:any) => {
                 body: JSON.stringify({
                     message: "Dashboard",
                     data: dashboard
+                })
+            }
+        }
+
+        if (httpMethod === 'POST' && path === '/makestate'){
+            const makestate = await sevice.makestate(data2, user);
+            return{
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: "Statistik berhasil dibuat",
+                    data: makestate
                 })
             }
         }
