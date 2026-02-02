@@ -49,11 +49,8 @@ export const makestate = async (userEmail: any) => {
         Key: { PK: `USER#${userEmail}`, SK: "CAT#MAKAN" }
     }));
 
-    if (!validate.Item) throw { status: 404, message: "Kategori tidak ditemukan, inisialisasi kategori terlebih dahulu." };
-    
-    if (validate.Item.bulan === dateInfo.monthStr) {
-        return;
-    }
+    if (!validate.Item) {return};
+    if (validate.Item.bulan === dateInfo.monthStr) {return};
 
     // Bulan yang akan di-arsipkan (Bulan yang tertulis di Database, misal: user buka di Feb, DB masih Jan)
     const monthToArchive = validate.Item.bulan; 
