@@ -50,8 +50,6 @@ Resources:
         Minify: true
         Target: es2020
         Sourcemap: true
-        EntryPoints:
-        - app.ts
 
   HeuaStatisticFunction:
     Type: AWS::Serverless::Function
@@ -69,8 +67,7 @@ Resources:
         Minify: true
         Target: es2020
         Sourcemap: true
-        EntryPoints:
-        - app.ts
+
 
   HeuaTable:
     Type: AWS::DynamoDB::Table
