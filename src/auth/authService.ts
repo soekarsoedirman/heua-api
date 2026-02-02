@@ -24,6 +24,24 @@ const getDailyQuote = async () => {
     return result.Item || { text: "Tetap hemat!", author: "HeUa" }; 
 };
 
+export const getRemainingDaysInMonth = () => {
+    const now = new Date(); 
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+    const today = now.getDate();
+    const remainingDays = lastDayOfMonth - today;
+
+    return {
+        today,
+        year,
+        monthStr: String(month).padStart(2, '0'), 
+        lastDayOfMonth,
+        remainingDays: remainingDays > 0 ? remainingDays : 0
+    };
+};
+
 
 export const login = async (data: any) => {
     const { email, password } = data;
@@ -49,6 +67,7 @@ export const login = async (data: any) => {
 
 export const register = async (data: any) => {
     const { email, password, username } = data;
+    const dateInfo = getRemainingDaysInMonth();
 
     if (!username || !email || !password) {
         throw { status: 400, message: "Data pendaftaran tidak lengkap" };
@@ -80,6 +99,8 @@ export const register = async (data: any) => {
                 nama,
                 limit: 0,
                 terpakai: 0,
+                bulan: dateInfo.monthStr,
+                tahun: dateInfo.year,
                 isDefault: true,
             },
         }

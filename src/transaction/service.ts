@@ -13,6 +13,24 @@ const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 const TableName = process.env.TABLE_NAME;
 
+export const getRemainingDaysInMonth = () => {
+    const now = new Date(); 
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+    const today = now.getDate();
+    const remainingDays = lastDayOfMonth - today;
+
+    return {
+        today,
+        year,
+        monthStr: String(month).padStart(2, '0'), 
+        lastDayOfMonth,
+        remainingDays: remainingDays > 0 ? remainingDays : 0
+    };
+};
+
 export const getIncomeSK = (tanggal: string) => {
     const uniqueId = Math.random().toString(36).substring(2, 7); 
     return `INCOME#${new Date(tanggal).toISOString()}#${uniqueId}`;
@@ -897,6 +915,8 @@ export const payDebt = async (data:any, user:any) => {
 export const newCategory = async (data: any, user: any) => {
     const userEmail = (user as any).email;
     const { nama, limit } = data;
+    const dateInfo = getRemainingDaysInMonth();
+    
     if (!nama || limit === undefined) throw { status: 400, message: "Data tidak lengkap" };
 
     try {
@@ -908,6 +928,8 @@ export const newCategory = async (data: any, user: any) => {
                 nama,
                 limit,
                 terpakai: 0,
+                bulan: dateInfo.monthStr,
+                tahun: dateInfo.year,
                 isDefault: false
             },
             ConditionExpression: "attribute_not_exists(SK)"

@@ -25,17 +25,6 @@ export const lambdaHandler = async (event:any) => {
             }
         }
 
-        if (httpMethod === 'POST' && path === '/makestate'){
-            const makestate = await sevice.makestate(data2, user);
-            return{
-                statusCode: 200,
-                body: JSON.stringify({
-                    message: "Statistik berhasil dibuat",
-                    data: makestate
-                })
-            }
-        }
-
         if (httpMethod === 'GET' && path === '/statistic'){
             const statistic = await sevice.statistic(data, user);
             return{
