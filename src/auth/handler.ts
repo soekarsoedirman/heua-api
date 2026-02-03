@@ -13,7 +13,7 @@ export const lambdaHandler = async (event: any) => {
                 statusCode: 200,
                 body: JSON.stringify({
                     message: "Login berhasil",
-                    token: profile
+                    data: profile
                 })
             }
         }
@@ -24,10 +24,17 @@ export const lambdaHandler = async (event: any) => {
                 statusCode: 200,
                 body: JSON.stringify({
                     message: "Register berhasil",
-                    token: profile
+                    data: profile
                 })
             }
         }
+
+        return {
+            statusCode: 404,
+            body: JSON.stringify({
+                message: `Route tidak ditemukan: ${httpMethod} ${path}`
+            })
+        };
 
     } catch (error: any) {
     console.error("Error Log: ", error);

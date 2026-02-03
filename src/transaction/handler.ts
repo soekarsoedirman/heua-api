@@ -149,6 +149,13 @@ export const lambdaHandler = async (event:any) => {
             }
         }
 
+        return {
+            statusCode: 404,
+            body: JSON.stringify({
+                message: `Route tidak ditemukan: ${httpMethod} ${path}`
+            })
+        };
+
         
     } catch (error:any) {
         console.error("Error Log: ", error);

@@ -6,6 +6,8 @@ import {
     GetCommand ,
     QueryCommand
 } from "@aws-sdk/lib-dynamodb";
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);

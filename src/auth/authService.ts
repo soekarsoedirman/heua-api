@@ -7,6 +7,8 @@ import {
     GetCommand 
 } from "@aws-sdk/lib-dynamodb";
 import jwt from "jsonwebtoken";
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);

@@ -1,15 +1,16 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, BatchWriteCommand } from "@aws-sdk/lib-dynamodb";
+import bcrypt from "bcryptjs"; // <--- Tambahan Import
 
 // --- KONFIGURASI ---
-const client = new DynamoDBClient({ region: "ap-southeast-1" });
+// Pastikan region sesuai dengan tabel Anda (ap-southeast-3 = Jakarta)
+const client = new DynamoDBClient({ region: "ap-southeast-3" }); 
 const docClient = DynamoDBDocumentClient.from(client);
-const TABLE_NAME = "HeUaTable"; 
+const TABLE_NAME = "HeuaData"; 
 const TARGET_EMAIL = "guru@sma.sch.id";
 
 // --- HELPER ---
 const getRandomId = () => Math.random().toString(36).substring(2, 7);
-const getISO = (dateStr: string) => new Date(dateStr).toISOString();
 
 // Fungsi Utama
 const seedData = async () => {
@@ -30,7 +31,7 @@ const seedData = async () => {
     );
 
     // B. Transaksi Outcome Januari
-    const outJan1 = { nominal: 2000000, kategori: "Makan", tanggal: "2026-01-05T12:00:00Z" }; // Overbudget ceritanya
+    const outJan1 = { nominal: 2000000, kategori: "Makan", tanggal: "2026-01-05T12:00:00Z" }; 
     const outJan2 = { nominal: 500000, kategori: "Transportasi", tanggal: "2026-01-10T08:00:00Z" };
     const outJan3 = { nominal: 300000, kategori: "Internet & Pulsa", tanggal: "2026-01-20T19:00:00Z" };
 
@@ -41,9 +42,8 @@ const seedData = async () => {
     );
 
     // C. STATISTIK JANUARI (STAT#2026-01)
-    // Ini adalah hasil "makestate" yang kita simpan manual untuk seed
-    const totalIncomeJan = incJan1.nominal + incJan2.nominal; // 9.500.000
-    const totalOutcomeJan = outJan1.nominal + outJan2.nominal + outJan3.nominal; // 2.800.000
+    const totalIncomeJan = incJan1.nominal + incJan2.nominal; 
+    const totalOutcomeJan = outJan1.nominal + outJan2.nominal + outJan3.nominal; 
 
     const statJan = {
         PK: `USER#${TARGET_EMAIL}`,
@@ -62,7 +62,7 @@ const seedData = async () => {
                 "Freelance": { total: 1500000, percent: 15.8 }
             },
             outcome: {
-                "Makan": { limit: 2000000, terpakai: 2000000, percent: 100, status: "SAFE" }, // Pas limit
+                "Makan": { limit: 2000000, terpakai: 2000000, percent: 100, status: "SAFE" },
                 "Transportasi": { limit: 500000, terpakai: 500000, percent: 100, status: "SAFE" },
                 "Internet & Pulsa": { limit: 300000, terpakai: 300000, percent: 100, status: "SAFE" }
             }
@@ -75,14 +75,11 @@ const seedData = async () => {
     // 2. DATA BERJALAN (FEBRUARI 2026) - LIVE
     // ==========================================
 
-    // A. Transaksi Income Feb
     const incFeb1 = { nominal: 8000000, kategori: "Gaji", tanggal: "2026-02-01T09:00:00Z" };
     allItems.push(
         { PutRequest: { Item: { PK: `USER#${TARGET_EMAIL}`, SK: `INCOME#${incFeb1.tanggal}#${getRandomId()}`, ...incFeb1, sumber: "bank", note: "Gaji Feb" } } }
     );
 
-    // B. Transaksi Outcome Feb (Ini yang akan mempengaruhi 'terpakai' di Kategori)
-    // Makan baru pakai 500rb, Transport 100rb
     const outFeb1 = { nominal: 500000, kategori: "Makan", tanggal: "2026-02-02T12:00:00Z" };
     const outFeb2 = { nominal: 100000, kategori: "Transportasi", tanggal: "2026-02-03T08:00:00Z" };
 
@@ -96,11 +93,10 @@ const seedData = async () => {
     // 3. MASTER DATA (KATEGORI & SALDO)
     // ==========================================
 
-    // A. Kategori (Running Balance untuk FEBRUARI)
-    // Ingat: terpakai di sini HANYA menghitung transaksi Februari
+    // A. Kategori
     const categories = [
-        { nama: "Makan", limit: 2000000, terpakai: 500000 }, // Sesuai outFeb1
-        { nama: "Transportasi", limit: 500000, terpakai: 100000 }, // Sesuai outFeb2
+        { nama: "Makan", limit: 2000000, terpakai: 500000 },
+        { nama: "Transportasi", limit: 500000, terpakai: 100000 },
         { nama: "Internet & Pulsa", limit: 300000, terpakai: 0 },
         { nama: "Hiburan", limit: 500000, terpakai: 0 },
         { nama: "Belanja Harian", limit: 1000000, terpakai: 0 },
@@ -115,8 +111,8 @@ const seedData = async () => {
                     SK: `CAT#${cat.nama.toUpperCase().replace(/\s+/g, "_")}`,
                     nama: cat.nama,
                     limit: cat.limit,
-                    terpakai: cat.terpakai, // Data Realtime Feb
-                    periode: "2026-02",     // Menandakan ini data aktif Feb
+                    terpakai: cat.terpakai,
+                    periode: "2026-02",
                     isDefault: true
                 }
             }
@@ -124,22 +120,36 @@ const seedData = async () => {
     });
 
     // B. Saldo Akhir (MONEY)
-    // Hitungan Kasar: 
-    // Awal (misal 5jt) + IncJan(9.5) - OutJan(2.8) + IncFeb(8.0) - OutFeb(0.6) = ~19.1jt
-    // Kita set manual saja biar mudah
     const moneyItem = {
         PK: `USER#${TARGET_EMAIL}`,
         SK: "MONEY",
         bank: 15000000,
         cash: 1000000,
-        tabungan: 3100000, // Total sekitar 19.1jt
+        tabungan: 3100000,
         updated_at: new Date().toISOString()
     };
     allItems.push({ PutRequest: { Item: moneyItem } });
 
+    // ==========================================
+    // 4. USER METADATA (LOGIN INFO)  <--- TAMBAHAN BARU
+    // ==========================================
+    
+    // Password dummy: "123456"
+    const hashedPassword = await bcrypt.hash("123456", 10);
+
+    const userMeta = {
+        PK: `USER#${TARGET_EMAIL}`,
+        SK: "METADATA",
+        username: "Pak Guru", // Username bebas
+        password: hashedPassword,
+        createdAt: new Date().toISOString(),
+        isActive: true
+    };
+    allItems.push({ PutRequest: { Item: userMeta } });
+
 
     // ==========================================
-    // 4. EKSEKUSI BATCH (Chunking per 25 items)
+    // 5. EKSEKUSI BATCH
     // ==========================================
     const chunks = [];
     while (allItems.length > 0) {
@@ -161,7 +171,9 @@ const seedData = async () => {
         }
     }
 
-    console.log("🎉 Seeding Selesai! Data siap dipakai untuk demo.");
+    console.log("🎉 Seeding Selesai! Data siap dipakai.");
+    console.log(`👉 Login Email: ${TARGET_EMAIL}`);
+    console.log(`👉 Login Pass : 123456`);
 };
 
 seedData();
