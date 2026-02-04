@@ -840,13 +840,13 @@ export const deleteDebt = async (data: any, user: any) => {
 
 export const payDebt = async (data:any, user:any) => {
     const userEmail = (user as any).email;
-    const { tanggal } = data;
+    const { sk } = data;
 
     const Hutang = await docClient.send(new GetCommand({
         TableName: TableName,
         Key: {
             PK: `USER#${userEmail}`,
-            SK: getDebtSK(tanggal)
+            SK: sk
         }
     }));
 
@@ -860,7 +860,7 @@ export const payDebt = async (data:any, user:any) => {
                 TableName: TableName,
                 Key: {
                     PK: `USER#${userEmail}`,
-                    SK: getDebtSK(tanggal)
+                    SK: sk
                 },
                 UpdateExpression: "SET #status = :status",
                 ExpressionAttributeNames: { "#status": "status" },
@@ -969,14 +969,14 @@ export const editCategory = async (data: any, user: any) => {
 
 export const deleteCategory = async (data: any, user: any) => {
     const userEmail = (user as any).email;
-    const { nama } = data;
+    const { sk } = data;
 
     try {
         await docClient.send(new DeleteCommand({
             TableName: TableName,
             Key: {
                 PK: `USER#${userEmail}`,
-                SK: `CAT#${nama.toUpperCase()}`
+                SK: sk
             },
             ConditionExpression: "attribute_exists(SK) AND isDefault <> :true",
             ExpressionAttributeValues: { ":true": true }
