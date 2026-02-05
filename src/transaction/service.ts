@@ -47,10 +47,16 @@ export const getDebtSK = (tanggal: string) => {
     return `DEBT#${new Date(tanggal).toISOString()}#${uniqueId}`;
 };
 
+export const test = async (data: any, user: any) => {
+    const userEmail = (user as any).email;
+    return userEmail;
+}
+
 export const newIncome = async (data: any, user: any) => {
     const userEmail = (user as any).email;
     const { tanggal, nominal, sumber, kategori, note } = data;
-    if (!tanggal || !nominal || !sumber) throw { status: 400, message: "Data tidak lengkap" };
+    const amount = Number(nominal);
+    if (!tanggal || !amount || !sumber) throw { status: 400, message: "Data tidak lengkap" };
 
     await docClient.send(new TransactWriteCommand({
         TransactItems: [
@@ -60,7 +66,7 @@ export const newIncome = async (data: any, user: any) => {
                     Item: {
                         PK: `USER#${userEmail}`,
                         SK: getIncomeSK(tanggal),
-                        nominal,
+                        nominal: amount,
                         sumber,
                         kategori,
                         note,
@@ -80,7 +86,7 @@ export const newIncome = async (data: any, user: any) => {
                         "#attr": kategori
                     },
                     ExpressionAttributeValues: {
-                        ":val": nominal
+                        ":val": amount
                     }
                 }
             }
@@ -105,6 +111,7 @@ export const editIncome = async (data: any, user: any) => {
 
     const oldNominal = oldData.Item.nominal;
     const oldKategori = oldData.Item.kategori;
+    const diff = nominal - oldNominal;
 
     const transactItems: any[] = [
         {
@@ -133,9 +140,9 @@ export const editIncome = async (data: any, user: any) => {
             Update: {
                 TableName: TableName,
                 Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
-                UpdateExpression: "SET #attr = #attr - :oldVal + :newVal",
+                UpdateExpression: "SET #attr = #attr  + :diff",
                 ExpressionAttributeNames: { "#attr": kategori },
-                ExpressionAttributeValues: { ":oldVal": oldNominal, ":newVal": nominal }
+                ExpressionAttributeValues: { ":diff": diff}
             }
         });
     } else {
@@ -144,20 +151,12 @@ export const editIncome = async (data: any, user: any) => {
                 Update: {
                     TableName: TableName,
                     Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
-                    UpdateExpression: "SET #oldAttr = #oldAttr - :oldVal",
-                    ExpressionAttributeNames: { "#oldAttr": oldKategori },
-                    ExpressionAttributeValues: { ":oldVal": oldNominal }
+                    UpdateExpression: "SET #oldAttr = #oldAttr - :oldVal, #newAttr = #newAttr + :newVal",
+                    ConditionExpression: "#oldAttr >= :oldVal",
+                    ExpressionAttributeNames: { "#oldAttr": oldKategori,  "#newAttr": kategori},
+                    ExpressionAttributeValues: { ":oldVal": oldNominal,  ":newVal": nominal}
                 }
             },
-            {
-                Update: {
-                    TableName: TableName,
-                    Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
-                    UpdateExpression: "SET #newAttr = #newAttr + :newVal",
-                    ExpressionAttributeNames: { "#newAttr": kategori },
-                    ExpressionAttributeValues: { ":newVal": nominal }
-                }
-            }
         );
     }
 
