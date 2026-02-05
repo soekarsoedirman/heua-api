@@ -289,6 +289,9 @@ export const editOutcome = async (data: any, user: any) => {
     const oldKategori = oldData.Item.kategori;
     const oldSumber = oldData.Item.sumber;
 
+    const diffkt = nominal - oldNominal;
+    const diffmy =  oldNominal - nominal;
+
     const transactItems: any[] = [
         {
             Update: {
@@ -316,9 +319,9 @@ export const editOutcome = async (data: any, user: any) => {
             Update: {
                 TableName: TableName,
                 Key: { PK: `USER#${userEmail}`, SK: `CAT#${kategori}` },
-                UpdateExpression: "SET #attr = #attr - :oldVal + :newVal",
+                UpdateExpression: "SET #attr = #attr + :diff",
                 ExpressionAttributeNames: { "#attr": "terpakai" },
-                ExpressionAttributeValues: { ":oldVal": oldNominal, ":newVal": nominal }
+                ExpressionAttributeValues: { ":diff": diffkt }
             }
         })
     } else {
@@ -350,10 +353,10 @@ export const editOutcome = async (data: any, user: any) => {
                 Update: {
                     TableName: TableName,
                     Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
-                    UpdateExpression: "SET #attr = #attr + :oldVal - :newVal",
+                    UpdateExpression: "SET #attr = #attr + :diff",
                     ConditionExpression: "#attr + :oldVal >= :newVal",
                     ExpressionAttributeNames: { "#attr": sumber },
-                    ExpressionAttributeValues: { ":oldVal": oldNominal, ":newVal": nominal }
+                    ExpressionAttributeValues: { ":diff": diffmy }
                 }
             }
         )
@@ -363,19 +366,10 @@ export const editOutcome = async (data: any, user: any) => {
                 Update: {
                     TableName: TableName,
                     Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
-                    UpdateExpression: "SET #old = #old + :oldVal",
-                    ExpressionAttributeNames: { "#old": oldSumber },
-                    ExpressionAttributeValues: { ":oldVal": oldNominal }
-                }
-            },
-            {
-                Update: {
-                    TableName: TableName,
-                    Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
-                    UpdateExpression: "SET #new = #new - :newVal",
+                    UpdateExpression: "SET #old = #old + :oldVal, #new = #new - :newVal",
                     ConditionExpression: "#new >= :newVal",
-                    ExpressionAttributeNames: { "#new": sumber },
-                    ExpressionAttributeValues: { ":newVal": nominal }
+                    ExpressionAttributeNames: { "#old": oldSumber,  "#new": sumber},
+                    ExpressionAttributeValues: { ":oldVal": oldNominal, ":newVal": nominal }
                 }
             }
         )
@@ -532,237 +526,122 @@ export const newDebt = async (data: any, user: any) => {
 }
 
 export const editDebt = async (data: any, user: any) => {
-    const userEmail = (user as any).email;
+    const userEmail = user.email || (user as any).username;
     const { sk, pihak, nominal, tipe, tenggat, source, note } = data;
-    if (!sk || !pihak || !nominal || !tipe || !source) throw { status: 400, message: "Data tidak lengkap" };
+
+    const newAmount = Number(nominal);
+    if (!sk || !pihak || !newAmount || !tipe || !source) {
+        throw { status: 400, message: "Data tidak lengkap" };
+    }
 
     const oldData = await docClient.send(new GetCommand({
         TableName: TableName,
-        Key: {
-            PK: `USER#${userEmail}`,
-            SK: sk
-        }
+        Key: { PK: `USER#${userEmail}`, SK: sk }
     }));
-    if (!oldData.Item) throw { status: 400, message: "Data tidak ditemukan" };
 
-    const oldNominal = oldData.Item.nominal;
-    const oldSource = oldData.Item.source;
-    const oldTipe = oldData.Item.tipe;
-    const status = oldData.Item.status;
+    if (!oldData.Item) throw { status: 404, message: "Data tidak ditemukan" };
+    const oldItem = oldData.Item;
+    
+    if (oldItem.status === "PAID") throw { status: 400, message: "Hutang sudah lunas, tidak bisa diedit" };
 
-    if (status === "PAID") throw { status: 400, message: "Hutang sudah dibayar" };
+    const oldAmount = Number(oldItem.nominal);
+    const oldSource = oldItem.source;
+    const oldTipe = oldItem.tipe;
 
-    const transactItems: any[] = [
-        {
-            Update:{
+    const revertValue = (oldTipe === "PIUTANG") ? oldAmount : -oldAmount;
+
+    const applyValue = (tipe === "PIUTANG") ? -newAmount : newAmount;
+
+    const transactItems: any[] = [];
+
+    transactItems.push({
+        Update: {
+            TableName: TableName,
+            Key: { PK: `USER#${userEmail}`, SK: sk },
+            UpdateExpression: "SET #pihak = :pihak, #nominal = :nominal, #tipe = :tipe, #tenggat = :tenggat, #source = :source, #note = :note, updated_at = :date",
+            ExpressionAttributeNames: {
+                "#pihak": "pihak", "#nominal": "nominal", "#tipe": "tipe",
+                "#tenggat": "tenggat", "#source": "source", "#note": "note"
+            },
+            ExpressionAttributeValues: {
+                ":pihak": pihak, ":nominal": newAmount, ":tipe": tipe,
+                ":tenggat": tenggat, ":source": source, ":note": note,
+                ":date": new Date().toISOString()
+            }
+        }
+    });
+
+    let moneyUpdate: any;
+
+    if (oldSource === source) {
+        const netChange = revertValue + applyValue;
+
+        if (netChange !== 0) {
+            moneyUpdate = {
+                Update: {
+                    TableName: TableName,
+                    Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
+                    UpdateExpression: "SET #tgt = if_not_exists(#tgt, :zero) + :val",
+                    ExpressionAttributeNames: { "#tgt": source },
+                    ExpressionAttributeValues: { 
+                        ":val": netChange, 
+                        ":zero": 0 
+                    }
+                }
+            };
+            
+            if (netChange < 0) {
+                moneyUpdate.Update.ConditionExpression = "#tgt >= :minBalance";
+                moneyUpdate.Update.ExpressionAttributeValues[":minBalance"] = Math.abs(netChange);
+            }
+        }
+
+    } else {
+        moneyUpdate = {
+            Update: {
                 TableName: TableName,
-                Key: {
-                    PK: `USER#${userEmail}`,
-                    SK: sk
+                Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
+                UpdateExpression: "SET #old = if_not_exists(#old, :zero) + :revert, #new = if_not_exists(#new, :zero) + :apply",
+                ExpressionAttributeNames: { 
+                    "#old": oldSource, 
+                    "#new": source 
                 },
-                UpdateExpression: "SET #pihak = :pihak, #nominal = :nominal, #tipe = :tipe, #tenggat = :tenggat, #source = :source, #note = :note",
-                ExpressionAttributeNames: {
-                    "#pihak": "pihak",
-                    "#nominal": "nominal",
-                    "#tipe": "tipe",
-                    "#tenggat": "tenggat",
-                    "#source": "source",
-                    "#note": "note"
-                },
-                ExpressionAttributeValues: {
-                    ":pihak": pihak,
-                    ":nominal": nominal,
-                    ":tipe": tipe,
-                    ":tenggat": tenggat,
-                    ":source": source,
-                    ":note": note
+                ExpressionAttributeValues: { 
+                    ":revert": revertValue, 
+                    ":apply": applyValue,
+                    ":zero": 0
                 }
             }
+        };
+        const conditions: string[] = [];
+        if (revertValue < 0) {
+            conditions.push("#old >= :minOld");
+            moneyUpdate.Update.ExpressionAttributeValues[":minOld"] = Math.abs(revertValue);
         }
-    ];
+        if (applyValue < 0) {
+            conditions.push("#new >= :minNew");
+            moneyUpdate.Update.ExpressionAttributeValues[":minNew"] = Math.abs(applyValue);
+        }
 
-    if (oldTipe === tipe){
-        if (oldSource === source){
-            if (tipe === "PIUTANG"){
-                transactItems.push(
-                    {
-                        Update: {
-                            TableName: TableName,
-                            Key: {
-                                PK: `USER#${userEmail}`,
-                                SK: `MONEY`,
-                            },
-                            UpdateExpression: "SET #attr = #attr + :oldVal - :newVal",
-                            ConditionExpression: "#attr + :oldVal >= :newVal",
-                            ExpressionAttributeNames: {
-                                "#attr": source
-                            },
-                            ExpressionAttributeValues: {
-                                ":oldVal": oldNominal,
-                                ":newVal": nominal
-                            }
-                        }
-                    }
-                )
-            }else{
-                transactItems.push(
-                    {
-                        Update: {
-                            TableName: TableName,
-                            Key: {
-                                PK: `USER#${userEmail}`,
-                                SK: `MONEY`,
-                            },
-                            UpdateExpression: "SET #attr = #attr - :oldVal + :newVal",
-                            ConditionExpression: "#attr + :newVal >= :oldVal",
-                            ExpressionAttributeNames: {
-                                "#attr": source
-                            },
-                            ExpressionAttributeValues: {
-                                ":oldVal": oldNominal,
-                                ":newVal": nominal
-                            }
-                        }
-                    }
-                )
-            }
-        }else{
-            if (tipe === "PIUTANG"){
-                transactItems.push(
-                    {
-                        Update: {
-                            TableName: TableName,
-                            Key: {
-                                PK: `USER#${userEmail}`,
-                                SK: `MONEY`,
-                            },
-                            UpdateExpression: "SET #old = #old + :oldVal, #new = #new - :newVal",
-                            ConditionExpression: "#new >= :newVal",
-                            ExpressionAttributeNames: {
-                                "#old": oldSource,
-                                "#new": source
-                            },
-                            ExpressionAttributeValues: {
-                                ":oldVal": oldNominal,
-                                ":newVal": nominal
-                            }
-                        }
-                    }
-                )
-            }else{
-                transactItems.push(
-                    {
-                        Update: {
-                            TableName: TableName,
-                            Key: {
-                                PK: `USER#${userEmail}`,
-                                SK: `MONEY`,
-                            },
-                            UpdateExpression: "SET #old = #old - :oldVal, #new = #new + :newVal",
-                            ConditionExpression: "#old >= :oldVal",
-                            ExpressionAttributeNames: {
-                                "#old": oldSource,
-                                "#new": source
-                            },
-                            ExpressionAttributeValues: {
-                                ":oldVal": oldNominal,
-                                ":newVal": nominal
-                            }
-                        }
-                    }
-                )
-            }
-        }
-    }else{
-        if (oldSource === source){
-            if (tipe === "PIUTANG"){
-                transactItems.push(
-                    {
-                        Update: {
-                            TableName: TableName,
-                            Key: {
-                                PK: `USER#${userEmail}`,
-                                SK: `MONEY`,
-                            },
-                            UpdateExpression: "SET #attr = #attr - :total",
-                            ConditionExpression: "#attr >= :total",
-                            ExpressionAttributeNames: {
-                                "#attr": oldSource
-                            },
-                            ExpressionAttributeValues: {
-                                ":total": oldNominal + nominal
-                            }
-                        }
-                    }
-                )
-            }else{
-                transactItems.push(
-                    {
-                        Update: {
-                            TableName: TableName,
-                            Key: {
-                                PK: `USER#${userEmail}`,
-                                SK: `MONEY`,
-                            },
-                            UpdateExpression: "SET #attr = #attr + :total",
-                            ExpressionAttributeNames: {
-                                "#attr": oldSource
-                            },
-                            ExpressionAttributeValues: {
-                                ":total": oldNominal + nominal
-                            }
-                        }
-                    }
-                )
-            }
-        }else{
-            if (tipe === "PIUTANG"){
-                transactItems.push(
-                    {
-                        Update: {
-                            TableName: TableName,
-                            Key: {
-                                PK: `USER#${userEmail}`,
-                                SK: `MONEY`,
-                            },
-                            UpdateExpression: "SET #old = #old - :oldVal, #new = #new - :newVal",
-                            ConditionExpression: "#old >= :oldVal AND #new >= :newVal",
-                            ExpressionAttributeNames: {
-                                "#old": oldSource,
-                                "#new": source
-                            },
-                            ExpressionAttributeValues: {
-                                ":oldVal": oldNominal,
-                                ":newVal": nominal
-                            }
-                        }
-                    }
-                )
-            }else{
-                transactItems.push(
-                    {
-                        Update: {
-                            TableName: TableName,
-                            Key: {
-                                PK: `USER#${userEmail}`,
-                                SK: `MONEY`,
-                            },
-                            UpdateExpression: "SET #old = #old + :oldVal, #new = #new + :newVal",
-                            ExpressionAttributeNames: {
-                                "#old": oldSource,
-                                "#new": source
-                            },
-                            ExpressionAttributeValues: {
-                                ":oldVal": oldNominal,
-                                ":newVal": nominal
-                            }
-                        }
-                    }
-                )
-            }
+        if (conditions.length > 0) {
+            moneyUpdate.Update.ConditionExpression = conditions.join(" AND ");
         }
     }
-}
+
+    if (moneyUpdate) {
+        transactItems.push(moneyUpdate);
+    }
+
+    try {
+        await docClient.send(new TransactWriteCommand({ TransactItems: transactItems }));
+    } catch (error: any) {
+        if (error.name === 'TransactionCanceledException') {
+            throw { status: 400, message: "Saldo tidak mencukupi untuk perubahan ini." };
+        }
+        console.error("Edit Debt Error:", error);
+        throw { status: 500, message: "Gagal mengupdate data" };
+    }
+};
 
 export const deleteDebt = async (data: any, user: any) => {
     const userEmail = (user as any).email;
