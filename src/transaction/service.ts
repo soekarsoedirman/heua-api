@@ -47,10 +47,6 @@ export const getDebtSK = (tanggal: string) => {
     return `DEBT#${new Date(tanggal).toISOString()}#${uniqueId}`;
 };
 
-export const test = async (data: any, user: any) => {
-    const userEmail = (user as any).email;
-    return userEmail;
-}
 
 export const newIncome = async (data: any, user: any) => {
     const userEmail = (user as any).email;
@@ -354,9 +350,9 @@ export const editOutcome = async (data: any, user: any) => {
                     TableName: TableName,
                     Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
                     UpdateExpression: "SET #attr = #attr + :diff",
-                    ConditionExpression: "#attr + :oldVal >= :newVal",
+                    ConditionExpression: "#attr >= :diffc",
                     ExpressionAttributeNames: { "#attr": sumber },
-                    ExpressionAttributeValues: { ":diff": diffmy }
+                    ExpressionAttributeValues: { ":diff": diffmy, ":diffc": diffkt }
                 }
             }
         )
@@ -823,14 +819,15 @@ export const newCategory = async (data: any, user: any) => {
 
 export const editCategory = async (data: any, user: any) => {
     const userEmail = (user as any).email;
-    const { nama, limit } = data;
+    const { sk
+        , limit } = data;
 
     try {
         await docClient.send(new UpdateCommand({
             TableName: TableName,
             Key: {
                 PK: `USER#${userEmail}`,
-                SK: `CAT#${nama.toUpperCase()}`
+                SK: sk
             },
             UpdateExpression: "SET #limit = :limit",
             ConditionExpression: "attribute_exists(SK)",

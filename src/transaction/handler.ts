@@ -149,10 +149,6 @@ export const lambdaHandler = async (event:any) => {
             }
         }
 
-        if (httpMethod === 'GET' && path === '/test'){
-            await sevice.test(data, user);
-        }
-
         return {
             statusCode: 404,
             body: JSON.stringify({
