@@ -47,6 +47,10 @@ export const getDebtSK = (tanggal: string) => {
     return `DEBT#${new Date(tanggal).toISOString()}#${uniqueId}`;
 };
 
+export const getSwitchSK = (tanggal: string) => {
+    const uniqueId = Math.random().toString(36).substring(2, 7);
+    return `SWITCH#${new Date(tanggal).toISOString()}#${uniqueId}`;
+};
 
 export const newIncome = async (data: any, user: any) => {
     const userEmail = (user as any).email;
@@ -871,9 +875,22 @@ export const tukarsimpanan = async (data: any, user: any) => {
     if (!asal || !tujuan || !nominal ) throw { status: 400, message: "Data tidak lengkap" };
     if (asal === tujuan) throw { status: 400, message: "Simpanan asal dan tujuan tidak boleh sama" };
 
+    const tanggal = new Date().toISOString();
     try {
         await docClient.send(new TransactWriteCommand({
             TransactItems: [
+                {
+                    Put:{
+                        TableName: TableName,
+                        Item:{
+                            PK: `USER#${userEmail}`,
+                            SK: getSwitchSK(tanggal),
+                            nominal,
+                            asal,
+                            tujuan,
+                        }
+                    }
+                },
                 {
                     Update: {
                         TableName: TableName,
