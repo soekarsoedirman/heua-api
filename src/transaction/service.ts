@@ -5,7 +5,8 @@ import {
     PutCommand,
     GetCommand,
     UpdateCommand,
-    DeleteCommand
+    DeleteCommand,
+    QueryCommand
 } from "@aws-sdk/lib-dynamodb";
 import * as dotenv from 'dotenv';
 dotenv.config();
@@ -44,6 +45,50 @@ export const daychek = (tanggal:string) =>{
         throw { 
             status: 403,
             message: "Transaksi terkunci. Tidak dapat mengubah data yang sudah lebih dari 24 jam." 
+        };
+    }
+}
+
+export const limitchek = async(limit:number, userEmail:string, excludeSK?:string) =>{
+
+    const [kategori, money] = await Promise.all([
+        docClient.send(new QueryCommand({
+            TableName: TableName,
+            KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk_prefix)",
+            ExpressionAttributeValues: {
+                ":pk": `USER#${userEmail}`,
+                ":sk_prefix": "CAT#"
+            }
+        })),
+
+        docClient.send(new GetCommand({
+            TableName: TableName,
+            Key: {
+                PK: `USER#${userEmail}`,
+                SK: 'MONEY'
+            }
+        }))
+    ])
+    if (!kategori.Items || !money.Item) throw { status: 400, message: "Data tidak ditemukan" };
+    
+    const items = kategori.Items || [];
+    const limitExisting = items.reduce((sum, item) => {
+        if (excludeSK && item.SK === excludeSK) {
+            return sum;
+        }
+        return sum + (Number(item.limit) || 0);
+    }, 0);
+
+    const limitTotal = limitExisting + Number(limit);
+
+    const cash = Number(money.Item.cash) || 0;
+    const bank = Number(money.Item.bank) || 0;
+    const totalUang = cash + bank; 
+
+    if (totalUang < limitTotal) {
+        throw { 
+            status: 400, 
+            message: `Total limit (${limitTotal}) melebihi total uang tersedia (${totalUang}).` 
         };
     }
 }
@@ -429,7 +474,7 @@ export const deleteOutcome = async (data: any, user: any) => {
 
     const tanggal = oldData.Item.tanggal;
     daychek(tanggal);
-    
+
     const oldKategori = oldData.Item.kategori;
     const oldNominal = oldData.Item.nominal;
     const oldSumber = oldData.Item.sumber;
@@ -828,6 +873,8 @@ export const newCategory = async (data: any, user: any) => {
     
     if (!nama || limit === undefined) throw { status: 400, message: "Data tidak lengkap" };
 
+    limitchek(limit, userEmail);
+
     try {
         await docClient.send(new PutCommand({
             TableName: TableName,
@@ -853,8 +900,9 @@ export const newCategory = async (data: any, user: any) => {
 
 export const editCategory = async (data: any, user: any) => {
     const userEmail = (user as any).email;
-    const { sk
-        , limit } = data;
+    const { sk, limit } = data;
+
+    limitchek(limit, userEmail,sk);
 
     try {
         await docClient.send(new UpdateCommand({
