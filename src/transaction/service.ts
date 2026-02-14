@@ -32,6 +32,22 @@ export const getRemainingDaysInMonth = () => {
     };
 };
 
+export const daychek = (tanggal:string) =>{
+    const transactionTime = new Date(tanggal).getTime();
+    const currentTime = Date.now();
+    
+    const oneDayInMs = 24 * 60 * 60 * 1000; 
+
+    const diff = currentTime - transactionTime;
+
+    if (diff > oneDayInMs) {
+        throw { 
+            status: 403,
+            message: "Transaksi terkunci. Tidak dapat mengubah data yang sudah lebih dari 24 jam." 
+        };
+    }
+}
+
 export const getIncomeSK = (tanggal: string) => {
     const uniqueId = Math.random().toString(36).substring(2, 7); 
     return `INCOME#${new Date(tanggal).toISOString()}#${uniqueId}`;
@@ -109,6 +125,9 @@ export const editIncome = async (data: any, user: any) => {
 
     if (!oldData.Item) throw { status: 400, message: "Data tidak ditemukan" };
 
+    const tanggal = oldData.Item.tanggal;
+    daychek(tanggal);
+
     const oldNominal = oldData.Item.nominal;
     const oldKategori = oldData.Item.kategori;
     const diff = nominal - oldNominal;
@@ -177,6 +196,9 @@ export const deleteIncome = async (data: any, user: any) => {
     }))
 
     if (!oldData.Item) throw { status: 400, message: "Data tidak ditemukan" }
+
+    const tanggal = oldData.Item.tanggal;
+    daychek(tanggal);
 
     const oldKategori = oldData.Item.kategori;
     const oldNominal = oldData.Item.nominal;
@@ -284,6 +306,11 @@ export const editOutcome = async (data: any, user: any) => {
     }))
 
     if (!oldData.Item) throw { status: 400, message: "Data tidak ditemukan" };
+
+
+    const tanggal = oldData.Item.tanggal;
+    daychek(tanggal);
+
 
     const oldNominal = oldData.Item.nominal;
     const oldKategori = oldData.Item.kategori;
@@ -400,6 +427,9 @@ export const deleteOutcome = async (data: any, user: any) => {
 
     if (!oldData.Item) throw { status: 400, message: "Data tidak ditemukan" };
 
+    const tanggal = oldData.Item.tanggal;
+    daychek(tanggal);
+    
     const oldKategori = oldData.Item.kategori;
     const oldNominal = oldData.Item.nominal;
     const oldSumber = oldData.Item.sumber;
