@@ -43,6 +43,116 @@ const getPreviousMonthParams = (year: number, monthStr: string) => {
     return `${y}-${String(m).padStart(2, '0')}`;
 };
 
+const generateLiveSummary = async (userEmail: string, year: number, month: string) => {
+    const period = `${year}-${month}`;
+
+    // 1. Ambil Semua Data Mentah
+    const [incomeData, outcomeData, debtData, moneyData, switchData] = await Promise.all([
+        docClient.send(new QueryCommand({
+            TableName: TableName,
+            KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+            ExpressionAttributeValues: { ":pk": `USER#${userEmail}`, ":sk": "INCOME#" }
+        })),
+        docClient.send(new QueryCommand({
+            TableName: TableName,
+            KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+            ExpressionAttributeValues: { ":pk": `USER#${userEmail}`, ":sk": "OUTCOME#" }
+        })),
+        docClient.send(new QueryCommand({
+            TableName: TableName,
+            KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+            ExpressionAttributeValues: { ":pk": `USER#${userEmail}`, ":sk": "DEBT#" }
+        })),
+        docClient.send(new GetCommand({
+            TableName: TableName,
+            Key: { PK: `USER#${userEmail}`, SK: "MONEY" }
+        })),
+        docClient.send(new QueryCommand({
+            TableName: TableName,
+            KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+            ExpressionAttributeValues: { ":pk": `USER#${userEmail}`, ":sk": "SWITCH#" }
+        }))
+    ]);
+
+    // 2. Filter Data Sesuai Periode (Bulan Ini)
+    const incomes = incomeData.Items?.filter(i => i.SK.includes(period)) || [];
+    const outcomes = outcomeData.Items?.filter(i => i.SK.includes(period)) || [];
+    const switches = switchData.Items?.filter(s => s.SK.includes(period)) || [];
+
+    // 3. Hitung Summary Dasar
+    const totalIncome = incomes.reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
+    const totalOutcome = outcomes.reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
+    
+    // Hutang/Piutang (Status UNPAID)
+    const debts = debtData.Items || [];
+    const totalHutang = debts.filter(d => d.tipe === 'HUTANG' && d.status === 'UNPAID')
+                             .reduce((s, i) => s + (Number(i.nominal)||0), 0);
+    const totalPiutang = debts.filter(d => d.tipe === 'PIUTANG' && d.status === 'UNPAID')
+                              .reduce((s, i) => s + (Number(i.nominal)||0), 0);
+
+    // Saldo Saat Ini
+    const saldo = moneyData.Item || { bank: 0, cash: 0, tabungan: 0 };
+    const totalDuit = (saldo.bank || 0) + (saldo.cash || 0) + (saldo.tabungan || 0);
+
+    // 4. Hitung Rasio Menabung (Logika Baru: Income Bank + Switch ke Bank)
+    const incomeSaved = incomes
+        .filter(inc => inc.kategori && inc.kategori.toLowerCase() === 'bank') // Case insensitive
+        .reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
+
+    const switchSaved = switches
+        .filter(sw => sw.tujuan && sw.tujuan.toLowerCase() === 'bank')
+        .reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
+
+    const totalSaved = incomeSaved + switchSaved;
+    const savingsRatio = totalIncome > 0 ? (totalSaved / totalIncome) * 100 : 0;
+
+    // 5. Breakdown Kategori Income
+    const incomeBreakdown: any = {};
+    incomes.forEach(inc => {
+        const catName = inc.kategori || "Lainnya";
+        if (!incomeBreakdown[catName]) incomeBreakdown[catName] = { total: 0, percent: 0 };
+        incomeBreakdown[catName].total += Number(inc.nominal);
+    });
+    // Hitung Persen Income
+    Object.keys(incomeBreakdown).forEach(k => {
+        incomeBreakdown[k].percent = totalIncome > 0 ? (incomeBreakdown[k].total / totalIncome) * 100 : 0;
+    });
+
+    // 6. Breakdown Kategori Outcome
+    const outcomeBreakdown: any = {};
+    outcomes.forEach(out => {
+        const catName = out.kategori || "Lainnya";
+        if (!outcomeBreakdown[catName]) outcomeBreakdown[catName] = { total: 0, percent: 0 }; // Note: Live stat tidak cek limit krn ribet fetch CAT# satu2
+        outcomeBreakdown[catName].total += Number(out.nominal);
+    });
+    // Hitung Persen Outcome
+    Object.keys(outcomeBreakdown).forEach(k => {
+        outcomeBreakdown[k].percent = totalOutcome > 0 ? (outcomeBreakdown[k].total / totalOutcome) * 100 : 0;
+    });
+
+    // 7. Return Format Object (Mirip dengan struktur yang disimpan di DB)
+    return {
+        PK: `USER#${userEmail}`,
+        SK: `STAT#${period}#PREVIEW`, // Penanda bahwa ini preview
+        type: "MONTHLY_PREVIEW",
+        created_at: new Date().toISOString(),
+        summary: {
+            total_duit: totalDuit,
+            saldo_breakdown: { bank: saldo.bank, cash: saldo.cash, tabungan: saldo.tabungan },
+            total_hutang: totalHutang,
+            total_piutang: totalPiutang,
+            total_income: totalIncome,
+            total_outcome: totalOutcome,
+            savings_ratio: parseFloat(savingsRatio.toFixed(2)),
+            cashflow_health: totalIncome >= totalOutcome ? "Sehat" : "Tidak Sehat"
+        },
+        breakdown: {
+            income: incomeBreakdown,
+            outcome: outcomeBreakdown
+        }
+    };
+};
+
 export const makestate = async (userEmail: any) => {
     const dateInfo = getRemainingDaysInMonth();
     
@@ -60,7 +170,7 @@ export const makestate = async (userEmail: any) => {
     const archivePeriod = `${yearToArchive}-${monthToArchive}`; // Format: 2026-01
 
     // 2. Pengambilan Data (Sudah Anda tulis, saya rapikan sedikit destructuring-nya)
-    const [incomeData, outcomeData, debtData, moneyData, categoryData] = await Promise.all([
+    const [incomeData, outcomeData, debtData, moneyData, categoryData, switchData] = await Promise.all([
         docClient.send(new QueryCommand({
             TableName: TableName,
             KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk_prefix)",
@@ -85,6 +195,11 @@ export const makestate = async (userEmail: any) => {
             KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk_prefix)",
             ExpressionAttributeValues: { ":pk": `USER#${userEmail}`, ":sk_prefix": "CAT#" }
         })),
+        docClient.send(new QueryCommand({
+            TableName: TableName,
+            KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk_prefix)",
+            ExpressionAttributeValues: { ":pk": `USER#${userEmail}`, ":sk_prefix": "SWITCH#" }
+        }))
     ]);
 
     // 3. Pembuatan Statistik & Pengolahan Data
@@ -93,7 +208,8 @@ export const makestate = async (userEmail: any) => {
     // Karena query mengambil semua history, kita filter manual di sini untuk bulan yang mau di-close
     const incomes = incomeData.Items?.filter(i => i.SK.includes(archivePeriod)) || [];
     const outcomes = outcomeData.Items?.filter(i => i.SK.includes(archivePeriod)) || [];
-    
+    const switches = switchData.Items?.filter(s => s.SK.includes(archivePeriod)) || [];
+
     // B. Hitung Summary Dasar
     const totalIncome = incomes.reduce((sum, item) => sum + (item.nominal || 0), 0);
     const totalOutcome = outcomes.reduce((sum, item) => sum + (item.nominal || 0), 0);
@@ -115,7 +231,16 @@ export const makestate = async (userEmail: any) => {
     const dailyAverageOutcome = totalOutcome / daysInArchivedMonth;
 
     // - Rasio Menabung
-    const savingsRatio = totalIncome > 0 ? ((totalIncome - totalOutcome) / totalIncome) * 100 : 0;
+    const incomeSaved = incomes
+        .filter(inc => inc.kategori && inc.kategori.toLowerCase() === 'bank')
+        .reduce((sum, item) => sum + (item.nominal || 0), 0);
+    
+    const switchSaved = switches
+        .filter(sw => sw.tujuan && sw.tujuan.toLowerCase() === 'bank')
+        .reduce((sum, item) => sum + (item.nominal || 0), 0);
+
+    const totalSaved = incomeSaved + switchSaved;
+    const savingsRatio = totalIncome > 0 ? (totalSaved / totalIncome) * 100 : 0;
 
     // - Cashflow Health
     const cashflowHealth = totalIncome >= totalOutcome ? "Sehat" : "Tidak Sehat";
@@ -284,12 +409,27 @@ export const statistic = async (data: any, user: any) => {
     const userEmail = (user as any).email;
     const dateInfo = getRemainingDaysInMonth();
 
-    makestate(userEmail);
+    const requestYear = data.year ? parseInt(data.year) : dateInfo.year;
+    const requestMonth = data.month ? String(data.month).padStart(2, '0') : dateInfo.monthStr;
+    
+    const isCurrentMonth = (requestYear === dateInfo.year) && (requestMonth === dateInfo.monthStr);
 
-    const targetYear = data.year ? parseInt(data.year) : dateInfo.year;
-    const targetMonth = data.month ? String(data.month).padStart(2, '0') : dateInfo.monthStr;
-    const targetSK = `STAT#${targetYear}-${targetMonth}`;
+    if (isCurrentMonth) {
+        try {
+            const liveData = await generateLiveSummary(userEmail, requestYear, requestMonth);
+            
+            return {
+                status: "SUCCESS",
+                message: "Summary sementara bulan ini (Live Data).",
+                data: liveData
+            };
+        } catch (error) {
+            console.error("Error generating live stats:", error);
+            throw { status: 500, message: "Gagal menghitung statistik live." };
+        }
+    }
 
+    const targetSK = `STAT#${requestYear}-${requestMonth}`;
     const result = await docClient.send(new GetCommand({
         TableName: TableName,
         Key: {
@@ -301,14 +441,14 @@ export const statistic = async (data: any, user: any) => {
     if (!result.Item) {
         return {
             status: "NOT_FOUND",
-            message: `Laporan statistik periode ${targetYear}-${targetMonth} belum dibuat. Silakan tutup buku terlebih dahulu atau cek periode lain.`,
+            message: `Laporan statistik periode ${requestYear}-${requestMonth} belum diarsipkan (Tutup Buku).`,
             data: null 
         };
     }
 
     return {
         status: "SUCCESS",
-        message: "Data statistik ditemukan.",
+        message: "Data statistik arsip ditemukan.",
         data: result.Item 
     };
 };
