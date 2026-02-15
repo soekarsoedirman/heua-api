@@ -12,10 +12,29 @@ const TARGET_EMAIL = "guru@sma.sch.id";
 // --- HELPER ---
 const getRandomId = () => Math.random().toString(36).substring(2, 7);
 
+export const getRemainingDaysInMonth = () => {
+    const now = new Date(); 
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+    const today = now.getDate();
+    const remainingDays = lastDayOfMonth - today;
+
+    return {
+        today,
+        year,
+        monthStr: String(month).padStart(2, '0'), 
+        lastDayOfMonth,
+        remainingDays: remainingDays > 0 ? remainingDays : 0
+    };
+};
+
 // Fungsi Utama
 const seedData = async () => {
     console.log(`🚀 Mulai seeding data lengkap untuk: ${TARGET_EMAIL}...`);
     const allItems: any[] = [];
+    const dateinfo = getRemainingDaysInMonth();
 
     // ==========================================
     // 1. DATA HISTORIS (JANUARI 2026) - SUDAH TUTUP BUKU
@@ -112,7 +131,8 @@ const seedData = async () => {
                     nama: cat.nama,
                     limit: cat.limit,
                     terpakai: cat.terpakai,
-                    periode: "2026-02",
+                    bulan: dateinfo.monthStr,
+                    tahun: dateinfo.year,
                     isDefault: true
                 }
             }
@@ -131,25 +151,47 @@ const seedData = async () => {
     allItems.push({ PutRequest: { Item: moneyItem } });
 
     // ==========================================
-    // 4. USER METADATA (LOGIN INFO)  <--- TAMBAHAN BARU
+    // 4. USER METADATA (LOGIN INFO)  
     // ==========================================
     
-    // Password dummy: "123456"
     const hashedPassword = await bcrypt.hash("123456", 10);
 
     const userMeta = {
         PK: `USER#${TARGET_EMAIL}`,
         SK: "METADATA",
-        username: "Pak Guru", // Username bebas
+        username: "Pak Guru", 
         password: hashedPassword,
         createdAt: new Date().toISOString(),
         isActive: true
     };
     allItems.push({ PutRequest: { Item: userMeta } });
 
+    // ==========================================
+    // 5. Quote
+    // ==========================================
+    const quotesHematUang = [
+        "Menghemat bukan berarti pelit, tapi menghargai setiap rupiah yang kamu hasilkan.",
+        "Uang kecil yang disimpan hari ini, bisa menjadi kebebasan besar di masa depan.",
+        "Bukan seberapa besar penghasilanmu, tapi seberapa bijak kamu mengelolanya.",
+        "Disiplin menabung hari ini adalah hadiah untuk dirimu di kemudian hari.",
+        "Keinginan itu sementara, keamanan finansial itu jangka panjang.",
+        "Orang kaya bukan hanya yang banyak uang, tapi yang pandai mengatur uangnya.",
+        "Hidup sederhana sekarang, hidup tenang selamanya."
+    ];
+
+    let inc = 1;
+
+    quotesHematUang.forEach(q =>{
+        allItems.push({ PutRequest: { Item: { 
+                    PK: `USER#${TARGET_EMAIL}`, 
+                    SK: `QUOTE#${inc}`, 
+                    text: q, 
+                } } })
+        inc += 1;
+    })
 
     // ==========================================
-    // 5. EKSEKUSI BATCH
+    // 6. EKSEKUSI BATCH
     // ==========================================
     const chunks = [];
     while (allItems.length > 0) {
