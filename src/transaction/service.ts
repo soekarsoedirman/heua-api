@@ -87,7 +87,7 @@ export const limitchek = async(limit:number, userEmail:string, excludeSK?:string
 
     if (totalUang < limitTotal) {
         throw { 
-            status: 400, 
+            status: 403, 
             message: `Total limit (${limitTotal}) melebihi total uang tersedia (${totalUang}).` 
         };
     }
@@ -171,7 +171,7 @@ export const editIncome = async (data: any, user: any) => {
     if (!oldData.Item) throw { status: 400, message: "Data tidak ditemukan" };
 
     const tanggal = oldData.Item.tanggal;
-    daychek(tanggal);
+    await daychek(tanggal);
 
     const oldNominal = oldData.Item.nominal;
     const oldKategori = oldData.Item.kategori;
@@ -243,7 +243,7 @@ export const deleteIncome = async (data: any, user: any) => {
     if (!oldData.Item) throw { status: 400, message: "Data tidak ditemukan" }
 
     const tanggal = oldData.Item.tanggal;
-    daychek(tanggal);
+    await daychek(tanggal);
 
     const oldKategori = oldData.Item.kategori;
     const oldNominal = oldData.Item.nominal;
@@ -354,7 +354,7 @@ export const editOutcome = async (data: any, user: any) => {
 
 
     const tanggal = oldData.Item.tanggal;
-    daychek(tanggal);
+    await daychek(tanggal);
 
 
     const oldNominal = oldData.Item.nominal;
@@ -473,7 +473,7 @@ export const deleteOutcome = async (data: any, user: any) => {
     if (!oldData.Item) throw { status: 400, message: "Data tidak ditemukan" };
 
     const tanggal = oldData.Item.tanggal;
-    daychek(tanggal);
+    await daychek(tanggal);
 
     const oldKategori = oldData.Item.kategori;
     const oldNominal = oldData.Item.nominal;
@@ -873,7 +873,7 @@ export const newCategory = async (data: any, user: any) => {
     
     if (!nama || limit === undefined) throw { status: 400, message: "Data tidak lengkap" };
 
-    limitchek(limit, userEmail);
+    await limitchek(limit, userEmail);
 
     try {
         await docClient.send(new PutCommand({
@@ -902,7 +902,7 @@ export const editCategory = async (data: any, user: any) => {
     const userEmail = (user as any).email;
     const { sk, limit } = data;
 
-    limitchek(limit, userEmail,sk);
+    await limitchek(limit, userEmail,sk);
 
     try {
         await docClient.send(new UpdateCommand({
