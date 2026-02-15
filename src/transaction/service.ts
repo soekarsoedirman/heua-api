@@ -16,7 +16,7 @@ const docClient = DynamoDBDocumentClient.from(client);
 const TableName = process.env.TABLE_NAME;
 
 export const getRemainingDaysInMonth = () => {
-    const now = new Date(); 
+    const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
 
@@ -27,29 +27,29 @@ export const getRemainingDaysInMonth = () => {
     return {
         today,
         year,
-        monthStr: String(month).padStart(2, '0'), 
+        monthStr: String(month).padStart(2, '0'),
         lastDayOfMonth,
         remainingDays: remainingDays > 0 ? remainingDays : 0
     };
 };
 
-export const daychek = (tanggal:string) =>{
+export const daychek = (tanggal: string) => {
     const transactionTime = new Date(tanggal).getTime();
     const currentTime = Date.now();
-    
-    const oneDayInMs = 24 * 60 * 60 * 1000; 
+
+    const oneDayInMs = 24 * 60 * 60 * 1000;
 
     const diff = currentTime - transactionTime;
 
     if (diff > oneDayInMs) {
-        throw { 
+        throw {
             status: 403,
-            message: "Transaksi terkunci. Tidak dapat mengubah data yang sudah lebih dari 24 jam." 
+            message: "Transaksi terkunci. Tidak dapat mengubah data yang sudah lebih dari 24 jam."
         };
     }
 }
 
-export const limitchek = async(limit:number, userEmail:string, excludeSK?:string) =>{
+export const limitchek = async (limit: number, userEmail: string, excludeSK?: string) => {
 
     const [kategori, money] = await Promise.all([
         docClient.send(new QueryCommand({
@@ -70,7 +70,7 @@ export const limitchek = async(limit:number, userEmail:string, excludeSK?:string
         }))
     ])
     if (!kategori.Items || !money.Item) throw { status: 400, message: "Data tidak ditemukan" };
-    
+
     const items = kategori.Items || [];
     const limitExisting = items.reduce((sum, item) => {
         if (excludeSK && item.SK === excludeSK) {
@@ -83,18 +83,18 @@ export const limitchek = async(limit:number, userEmail:string, excludeSK?:string
 
     const cash = Number(money.Item.cash) || 0;
     const bank = Number(money.Item.bank) || 0;
-    const totalUang = cash + bank; 
+    const totalUang = cash + bank;
 
     if (totalUang < limitTotal) {
-        throw { 
-            status: 403, 
-            message: `Total limit (${limitTotal}) melebihi total uang tersedia (${totalUang}).` 
+        throw {
+            status: 403,
+            message: `Total limit (${limitTotal}) melebihi total uang tersedia (${totalUang}).`
         };
     }
 }
 
 export const getIncomeSK = (tanggal: string) => {
-    const uniqueId = Math.random().toString(36).substring(2, 7); 
+    const uniqueId = Math.random().toString(36).substring(2, 7);
     return `INCOME#${new Date(tanggal).toISOString()}#${uniqueId}`;
 };
 
@@ -181,8 +181,8 @@ export const editIncome = async (data: any, user: any) => {
         {
             Update: {
                 TableName: TableName,
-                Key: { PK: `USER#${userEmail}`, SK: sk},
-                UpdateExpression : "SET #nominal = :nominal, #sumber = :sumber, #kategori = :kategori, #note = :note",
+                Key: { PK: `USER#${userEmail}`, SK: sk },
+                UpdateExpression: "SET #nominal = :nominal, #sumber = :sumber, #kategori = :kategori, #note = :note",
                 ExpressionAttributeNames: {
                     "#nominal": "nominal",
                     "#sumber": "sumber",
@@ -206,7 +206,7 @@ export const editIncome = async (data: any, user: any) => {
                 Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
                 UpdateExpression: "SET #attr = #attr  + :diff",
                 ExpressionAttributeNames: { "#attr": kategori },
-                ExpressionAttributeValues: { ":diff": diff}
+                ExpressionAttributeValues: { ":diff": diff }
             }
         });
     } else {
@@ -217,8 +217,8 @@ export const editIncome = async (data: any, user: any) => {
                     Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
                     UpdateExpression: "SET #oldAttr = #oldAttr - :oldVal, #newAttr = #newAttr + :newVal",
                     ConditionExpression: "#oldAttr >= :oldVal",
-                    ExpressionAttributeNames: { "#oldAttr": oldKategori,  "#newAttr": kategori},
-                    ExpressionAttributeValues: { ":oldVal": oldNominal,  ":newVal": nominal}
+                    ExpressionAttributeNames: { "#oldAttr": oldKategori, "#newAttr": kategori },
+                    ExpressionAttributeValues: { ":oldVal": oldNominal, ":newVal": nominal }
                 }
             },
         );
@@ -284,57 +284,64 @@ export const newOutcome = async (data: any, user: any) => {
     const { tanggal, nominal, sumber, kategori, note } = data;
     if (!tanggal || !nominal || !kategori) throw { status: 400, message: "Data tidak lengkap" };
 
-    await docClient.send(new TransactWriteCommand({
-        TransactItems: [
-            {
-                Put: {
-                    TableName: TableName,
-                    Item: {
-                        PK: `USER#${userEmail}`,
-                        SK: getOutcomeSK(tanggal),
-                        nominal,
-                        sumber,
-                        kategori,
-                        note,
-                        tanggal,
+    try {
+        await docClient.send(new TransactWriteCommand({
+            TransactItems: [
+                {
+                    Put: {
+                        TableName: TableName,
+                        Item: {
+                            PK: `USER#${userEmail}`,
+                            SK: getOutcomeSK(tanggal),
+                            nominal,
+                            sumber,
+                            kategori,
+                            note,
+                            tanggal,
+                        }
+                    }
+                },
+                {
+                    Update: {
+                        TableName: TableName,
+                        Key: {
+                            PK: `USER#${userEmail}`,
+                            SK: `CAT#${kategori}`
+                        },
+                        UpdateExpression: "SET #attr = #attr + :val",
+                        ExpressionAttributeNames: {
+                            "#attr": "terpakai"
+                        },
+                        ExpressionAttributeValues: {
+                            ":val": nominal
+                        }
+                    }
+                },
+                {
+                    Update: {
+                        TableName: TableName,
+                        Key: {
+                            PK: `USER#${userEmail}`,
+                            SK: `MONEY`,
+                        },
+                        UpdateExpression: "SET #attr = #attr - :attr",
+                        ConditionExpression: "#attr >= :attr",
+                        ExpressionAttributeNames: {
+                            "#attr": sumber
+                        },
+                        ExpressionAttributeValues: {
+                            ":attr": nominal
+                        }
                     }
                 }
-            },
-            {
-                Update: {
-                    TableName: TableName,
-                    Key: {
-                        PK: `USER#${userEmail}`,
-                        SK: `CAT#${kategori}`
-                    },
-                    UpdateExpression: "SET #attr = #attr + :val",
-                    ExpressionAttributeNames: {
-                        "#attr": "terpakai"
-                    },
-                    ExpressionAttributeValues: {
-                        ":val": nominal
-                    }
-                }
-            },
-            {
-                Update: {
-                    TableName: TableName,
-                    Key: {
-                        PK: `USER#${userEmail}`,
-                        SK: `MONEY`,
-                    },
-                    UpdateExpression: "SET #attr = #attr - :attr",
-                    ConditionExpression: "#attr >= :attr",
-                    ExpressionAttributeNames: {
-                        "#attr": sumber
-                    },
-                    ExpressionAttributeValues: {
-                        ":attr": nominal
-                    }
-                }
-            }
-        ]
-    }));
+            ]
+        }));
+    } catch (error: any) {
+        if (error.name === 'TransactionCanceledException') {
+            throw { status: 400, message: "Saldo di dompet Anda tidak mencukupi untuk transaksi ini." };
+        }
+        throw error;
+    }
 }
 
 export const editOutcome = async (data: any, user: any) => {
@@ -362,15 +369,15 @@ export const editOutcome = async (data: any, user: any) => {
     const oldSumber = oldData.Item.sumber;
 
     const diffkt = nominal - oldNominal;
-    const diffmy =  oldNominal - nominal;
+    const diffmy = oldNominal - nominal;
 
     const transactItems: any[] = [
         {
             Update: {
                 TableName: TableName,
-                Key: { PK: `USER#${userEmail}`, SK: sk},
+                Key: { PK: `USER#${userEmail}`, SK: sk },
                 UpdateExpression: "SET #nominal = :nominal, #sumber = :sumber, #kategori = :kategori, #note = :note",
-                ExpressionAttributeNames : {
+                ExpressionAttributeNames: {
                     "#nominal": "nominal",
                     "#sumber": "sumber",
                     "#kategori": "kategori",
@@ -440,7 +447,7 @@ export const editOutcome = async (data: any, user: any) => {
                     Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
                     UpdateExpression: "SET #old = #old + :oldVal, #new = #new - :newVal",
                     ConditionExpression: "#new >= :newVal",
-                    ExpressionAttributeNames: { "#old": oldSumber,  "#new": sumber},
+                    ExpressionAttributeNames: { "#old": oldSumber, "#new": sumber },
                     ExpressionAttributeValues: { ":oldVal": oldNominal, ":newVal": nominal }
                 }
             }
@@ -544,15 +551,15 @@ export const newDebt = async (data: any, user: any) => {
                     tenggat,
                     source,
                     note,
-                    status : "UNPAID",
+                    status: "UNPAID",
                     tanggal,
                 }
             }
         }
     ]
 
-    if (tipe === "PIUTANG"){
-         transactItems.push(
+    if (tipe === "PIUTANG") {
+        transactItems.push(
             {
                 Update: {
                     TableName: TableName,
@@ -570,7 +577,7 @@ export const newDebt = async (data: any, user: any) => {
                     }
                 }
             })
-    }else{
+    } else {
         transactItems.push(
             {
                 Update: {
@@ -616,7 +623,7 @@ export const editDebt = async (data: any, user: any) => {
 
     if (!oldData.Item) throw { status: 404, message: "Data tidak ditemukan" };
     const oldItem = oldData.Item;
-    
+
     if (oldItem.status === "PAID") throw { status: 400, message: "Hutang sudah lunas, tidak bisa diedit" };
 
     const oldAmount = Number(oldItem.nominal);
@@ -658,13 +665,13 @@ export const editDebt = async (data: any, user: any) => {
                     Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
                     UpdateExpression: "SET #tgt = if_not_exists(#tgt, :zero) + :val",
                     ExpressionAttributeNames: { "#tgt": source },
-                    ExpressionAttributeValues: { 
-                        ":val": netChange, 
-                        ":zero": 0 
+                    ExpressionAttributeValues: {
+                        ":val": netChange,
+                        ":zero": 0
                     }
                 }
             };
-            
+
             if (netChange < 0) {
                 moneyUpdate.Update.ConditionExpression = "#tgt >= :minBalance";
                 moneyUpdate.Update.ExpressionAttributeValues[":minBalance"] = Math.abs(netChange);
@@ -677,12 +684,12 @@ export const editDebt = async (data: any, user: any) => {
                 TableName: TableName,
                 Key: { PK: `USER#${userEmail}`, SK: `MONEY` },
                 UpdateExpression: "SET #old = if_not_exists(#old, :zero) + :revert, #new = if_not_exists(#new, :zero) + :apply",
-                ExpressionAttributeNames: { 
-                    "#old": oldSource, 
-                    "#new": source 
+                ExpressionAttributeNames: {
+                    "#old": oldSource,
+                    "#new": source
                 },
-                ExpressionAttributeValues: { 
-                    ":revert": revertValue, 
+                ExpressionAttributeValues: {
+                    ":revert": revertValue,
                     ":apply": applyValue,
                     ":zero": 0
                 }
@@ -720,7 +727,7 @@ export const editDebt = async (data: any, user: any) => {
 
 export const deleteDebt = async (data: any, user: any) => {
     const userEmail = (user as any).email;
-    const { sk } =data;
+    const { sk } = data;
 
     const oldData = await docClient.send(new GetCommand({
         TableName: TableName,
@@ -742,12 +749,12 @@ export const deleteDebt = async (data: any, user: any) => {
         }
     ];
 
-    const {status, tipe, source, nominal} = oldData.Item;
+    const { status, tipe, source, nominal } = oldData.Item;
 
-    if (status === "PAID" ) throw { status: 400, message: "Hutang sudah dibayar" };
+    if (status === "PAID") throw { status: 400, message: "Hutang sudah dibayar" };
 
-    if (status === "UNPAID"){
-        if (tipe === "PIUTANG"){
+    if (status === "UNPAID") {
+        if (tipe === "PIUTANG") {
             transactItems.push(
                 {
                     Update: {
@@ -766,7 +773,7 @@ export const deleteDebt = async (data: any, user: any) => {
                     }
                 }
             )
-        }else{
+        } else {
             transactItems.push(
                 {
                     Update: {
@@ -791,7 +798,7 @@ export const deleteDebt = async (data: any, user: any) => {
     await docClient.send(new TransactWriteCommand({ TransactItems: transactItems }));
 }
 
-export const payDebt = async (data:any, user:any) => {
+export const payDebt = async (data: any, user: any) => {
     const userEmail = (user as any).email;
     const { sk } = data;
 
@@ -803,9 +810,9 @@ export const payDebt = async (data:any, user:any) => {
         }
     }));
 
-    if(!Hutang.Item) throw { status: 400, message: "Data tidak ditemukan" };
-    
-    const {tipe, nominal, source} = Hutang.Item;
+    if (!Hutang.Item) throw { status: 400, message: "Data tidak ditemukan" };
+
+    const { tipe, nominal, source } = Hutang.Item;
 
     const transactItems: any[] = [
         {
@@ -822,7 +829,7 @@ export const payDebt = async (data:any, user:any) => {
         }
     ];
 
-    if (tipe === "PIUTANG"){
+    if (tipe === "PIUTANG") {
         transactItems.push(
             {
                 Update: {
@@ -841,7 +848,7 @@ export const payDebt = async (data:any, user:any) => {
                 }
             }
         )
-    }else{
+    } else {
         transactItems.push(
             {
                 Update: {
@@ -870,7 +877,7 @@ export const newCategory = async (data: any, user: any) => {
     const userEmail = (user as any).email;
     const { nama, limit } = data;
     const dateInfo = getRemainingDaysInMonth();
-    
+
     if (!nama || limit === undefined) throw { status: 400, message: "Data tidak lengkap" };
 
     await limitchek(limit, userEmail);
@@ -902,7 +909,7 @@ export const editCategory = async (data: any, user: any) => {
     const userEmail = (user as any).email;
     const { sk, limit } = data;
 
-    await limitchek(limit, userEmail,sk);
+    await limitchek(limit, userEmail, sk);
 
     try {
         await docClient.send(new UpdateCommand({
@@ -949,8 +956,8 @@ export const deleteCategory = async (data: any, user: any) => {
 export const tukarsimpanan = async (data: any, user: any) => {
     const userEmail = (user as any).email;
     const { nominal, asal, tujuan } = data;
-    
-    if (!asal || !tujuan || !nominal ) throw { status: 400, message: "Data tidak lengkap" };
+
+    if (!asal || !tujuan || !nominal) throw { status: 400, message: "Data tidak lengkap" };
     if (asal === tujuan) throw { status: 400, message: "Simpanan asal dan tujuan tidak boleh sama" };
 
     const tanggal = new Date().toISOString();
@@ -958,9 +965,9 @@ export const tukarsimpanan = async (data: any, user: any) => {
         await docClient.send(new TransactWriteCommand({
             TransactItems: [
                 {
-                    Put:{
+                    Put: {
                         TableName: TableName,
-                        Item:{
+                        Item: {
                             PK: `USER#${userEmail}`,
                             SK: getSwitchSK(tanggal),
                             nominal,

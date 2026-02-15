@@ -407,10 +407,13 @@ export const dashboard = async (data: any, user: any) => {
 
 export const statistic = async (data: any, user: any) => {
     const userEmail = (user as any).email;
+
+    await makestate(userEmail);
+
     const dateInfo = getRemainingDaysInMonth();
 
-    const requestYear = data.year ? parseInt(data.year) : dateInfo.year;
-    const requestMonth = data.month ? String(data.month).padStart(2, '0') : dateInfo.monthStr;
+    const requestYear = data.tahun ? parseInt(data.tahun) : dateInfo.year;
+    const requestMonth = data.bulan ? String(data.bulan).padStart(2, '0') : dateInfo.monthStr;
     
     const isCurrentMonth = (requestYear === dateInfo.year) && (requestMonth === dateInfo.monthStr);
 
