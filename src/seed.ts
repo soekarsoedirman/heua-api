@@ -183,8 +183,8 @@ const seedData = async () => {
 
     quotesHematUang.forEach(q =>{
         allItems.push({ PutRequest: { Item: { 
-                    PK: `USER#${TARGET_EMAIL}`, 
-                    SK: `QUOTE#${inc}`, 
+                    PK: "QUOTE", 
+                    SK: `${inc}`, 
                     text: q, 
                 } } })
         inc += 1;
