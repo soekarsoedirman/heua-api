@@ -60,30 +60,62 @@ const seedData = async () => {
         { PutRequest: { Item: { PK: `USER#${TARGET_EMAIL}`, SK: `OUTCOME#${outJan3.tanggal}#${getRandomId()}`, ...outJan3, sumber: "bank", note: "WiFi" } } }
     );
 
+    // ==========================================
     // C. STATISTIK JANUARI (STAT#2026-01)
+    // ==========================================
     const totalIncomeJan = incJan1.nominal + incJan2.nominal; 
     const totalOutcomeJan = outJan1.nominal + outJan2.nominal + outJan3.nominal; 
-
+    
     const statJan = {
         PK: `USER#${TARGET_EMAIL}`,
         SK: `STAT#2026-01`,
         type: "MONTHLY_REPORT",
         created_at: "2026-02-01T00:00:01Z",
         summary: {
+            total_duit: 19100000,
+            saldo_breakdown: { bank: 15000000, cash: 1000000, tabungan: 3100000 },
+            total_hutang: 0,
+            total_piutang: 0,
             total_income: totalIncomeJan,
             total_outcome: totalOutcomeJan,
-            savings_ratio: ((totalIncomeJan - totalOutcomeJan) / totalIncomeJan) * 100,
-            cashflow_health: "Sehat"
+            daily_average_outcome: Math.round(totalOutcomeJan / 31), 
+            savings_ratio: 0, 
+            cashflow_health: totalIncomeJan >= totalOutcomeJan ? "Sehat" : "Tidak Sehat",
+            mom_comparison: {
+                income_growth_percent: 100, 
+                outcome_growth_percent: 100
+            }
         },
         breakdown: {
             income: {
-                "Gaji": { total: 8000000, percent: 84.2 },
-                "Freelance": { total: 1500000, percent: 15.8 }
+                "Gaji": { 
+                    total: incJan1.nominal, 
+                    percent: parseFloat(((incJan1.nominal / totalIncomeJan) * 100).toFixed(2)) 
+                },
+                "Freelance": { 
+                    total: incJan2.nominal, 
+                    percent: parseFloat(((incJan2.nominal / totalIncomeJan) * 100).toFixed(2)) 
+                }
             },
             outcome: {
-                "Makan": { limit: 2000000, terpakai: 2000000, percent: 100, status: "SAFE" },
-                "Transportasi": { limit: 500000, terpakai: 500000, percent: 100, status: "SAFE" },
-                "Internet & Pulsa": { limit: 300000, terpakai: 300000, percent: 100, status: "SAFE" }
+                "Makan": { 
+                    limit: 2000000, 
+                    terpakai: outJan1.nominal, 
+                    percent: (outJan1.nominal / 2000000) * 100, 
+                    status: outJan1.nominal > 2000000 ? "OVERBUDGET" : "SAFE" 
+                },
+                "Transportasi": { 
+                    limit: 500000, 
+                    terpakai: outJan2.nominal, 
+                    percent: (outJan2.nominal / 500000) * 100, 
+                    status: outJan2.nominal > 500000 ? "OVERBUDGET" : "SAFE" 
+                },
+                "Internet & Pulsa": { 
+                    limit: 300000, 
+                    terpakai: outJan3.nominal, 
+                    percent: (outJan3.nominal / 300000) * 100, 
+                    status: outJan3.nominal > 300000 ? "OVERBUDGET" : "SAFE" 
+                }
             }
         }
     };
